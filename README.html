@@ -1,0 +1,173 @@
+<div class="content">
+    <h1>Operator SDK</h1>
+    <h5><i class="fa fa-angle-double-right" aria-hidden="true"></i> Go-based Operator (Pod Set)</h5>
+    <hr>
+  
+    <div class="lab-content">
+      <p>Let’s begin my creating a new project called <code class="highlighter-rouge">myproject</code>:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>oc new-project myproject
+  </code></pre></div></div>
+  
+  <p>Let’s now create a new directory in our <code class="highlighter-rouge">$GOPATH/src/</code> directory:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>mkdir -p $GOPATH/src/github.com/redhat/
+  </code></pre></div></div>
+  
+  <p>Navigate to the directory:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cd $GOPATH/src/github.com/redhat/
+  </code></pre></div></div>
+  
+  <p>Create a new Go-based Operator SDK project for the PodSet:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>operator-sdk new podset-operator --type=go --skip-git-init
+  </code></pre></div></div>
+  
+  <p>Navigate to the project root:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cd podset-operator
+  </code></pre></div></div>
+  
+  <p>Add a new Custom Resource Definition(CRD) API called PodSet, with APIVersion <code class="highlighter-rouge">app.example.com/v1alpha1</code> and Kind <code class="highlighter-rouge">PodSet</code>:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>operator-sdk add api --api-version=app.example.com/v1alpha1 --kind=PodSet
+  </code></pre></div></div>
+  
+  <p>This will scaffold the PodSet resource API under <code class="highlighter-rouge">pkg/apis/cache/v1alpha1/...</code>.</p>
+  
+  <p>The Operator-SDK automatically creates the following manifests for you under the <code class="highlighter-rouge">/deploy</code> directory.</p>
+  
+  <ul>
+    <li>Custom Resource Definition</li>
+    <li>Custom Resource</li>
+    <li>Service Account</li>
+    <li>Role</li>
+    <li>RoleBinding</li>
+    <li>Deployment</li>
+  </ul>
+  
+  <p>Inspect the Custom Resource Definition manifest:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cat deploy/crds/app_v1alpha1_podset_crd.yaml
+  </code></pre></div></div>
+  
+  <p>Deploy your PodSet Custom Resource Definition to the live OpenShift Cluster:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>oc create -f deploy/crds/app_v1alpha1_podset_crd.yaml
+  </code></pre></div></div>
+  
+  <p>Confirm the CRD was successfully created:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>oc get crd
+  </code></pre></div></div>
+  
+  <p>Verify there are no current PodSets created:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>oc get podset
+  </code></pre></div></div>
+  
+  <p>Modify the spec and status of the <code class="highlighter-rouge">PodSet</code> Custom Resource(CR) at <code class="highlighter-rouge">go/src/github.com/redhat/podset-operator/pkg/apis/app/v1alpha1/podset_types.go</code>:</p>
+  
+  <pre><code class="language-Go">package v1alpha1
+  
+  import (
+      metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+  )
+  
+  // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
+  // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+  
+  // PodSetSpec defines the desired state of PodSet
+  type PodSetSpec struct {
+      Replicas int32 `json:"replicas"`
+  }
+  
+  // PodSetStatus defines the observed state of PodSet
+  type PodSetStatus struct {
+      PodNames []string `json:"podNames"`
+  }
+  
+  // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+  
+  // PodSet is the Schema for the podsets API
+  // +k8s:openapi-gen=true
+  type PodSet struct {
+      metav1.TypeMeta   `json:",inline"`
+      metav1.ObjectMeta `json:"metadata,omitempty"`
+  
+      Spec   PodSetSpec   `json:"spec,omitempty"`
+      Status PodSetStatus `json:"status,omitempty"`
+  }
+  
+  // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+  
+  // PodSetList contains a list of PodSet
+  type PodSetList struct {
+      metav1.TypeMeta `json:",inline"`
+      metav1.ListMeta `json:"metadata,omitempty"`
+      Items           []PodSet `json:"items"`
+  }
+  
+  func init() {
+      SchemeBuilder.Register(&amp;PodSet{}, &amp;PodSetList{})
+  }
+  </code></pre>
+  
+  <p>After modifying the <code class="highlighter-rouge">*_types.go</code> file always run the following command to update the generated code for that resource type:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>operator-sdk generate k8s
+  </code></pre></div></div>
+  
+  <p>Add a new Controller to the project that will watch and reconcile the PodSet resource:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>operator-sdk add controller --api-version=app.example.com/v1alpha1 --kind=PodSet
+  </code></pre></div></div>
+  
+  <p>This will scaffold a new Controller implementation under <code class="highlighter-rouge">go/src/github.com/redhat/podset-operator/pkg/controller/podset/podset_controller.go</code>.</p>
+  
+  <p>Modify the PodSet controller logic at <code class="highlighter-rouge">go/src/github.com/redhat/podset-operator/pkg/controller/podset/podset_controller.go</code>:</p>
+  
+  <p>Now we can test our logic by running our Operator outside the cluster via our <code class="highlighter-rouge">kubeconfig</code> credentials:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>operator-sdk up local --namespace myproject
+  </code></pre></div></div>
+  
+  <p>In a new terminal, inspect the Custom Resource manifest:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>cd $GOPATH/src/github.com/redhat/podset-operator/
+  cat deploy/crds/app_v1alpha1_podset_cr.yaml
+  </code></pre></div></div>
+  
+  <p>Ensure your <code class="highlighter-rouge">kind: PodSet</code> Custom Resource (CR) is updated with <code class="highlighter-rouge">spec.replicas</code>:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>apiVersion: app.example.com/v1alpha1
+  kind: PodSet
+  metadata:
+    name: example-podset
+  spec:
+    replicas: 3
+  </code></pre></div></div>
+  
+  <p>Deploy your PodSet Custom Resource to the live OpenShift Cluster:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>oc create -f deploy/crds/app_v1alpha1_podset_cr.yaml
+  </code></pre></div></div>
+  
+  <p>Verify the PodSet operator has created 3 pods:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>oc get pods
+  </code></pre></div></div>
+  
+  <p>Verify that status shows the name of the pods currently owned by the PodSet:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>oc get podset example-podset -o yaml
+  </code></pre></div></div>
+  
+  <p>Increase the number of replicas owned by the PodSet:</p>
+  
+  <div class="highlighter-rouge"><div class="highlight"><pre class="highlight"><code>oc patch podset example-podset --type='json' -p '[{"op": "replace", "path": "/spec/replicas", "value":5}]'
+  </code></pre></div></div>
+  
+    </div>
+  </div>
